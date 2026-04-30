@@ -1,0 +1,46 @@
+{
+  "name": "Free Claude Code Proxy",
+  "description": "Heroku deployment for Free Claude Code Proxy (Anthropic-compatible)",
+  "repository": "https://github.com/IamElite/CCHP",
+  "keywords": ["claude", "proxy", "nvidia-nim", "anthropic"],
+  "env": {
+    "NVIDIA_NIM_API_KEY": {
+      "description": "Your NVIDIA NIM API Key",
+      "required": true
+    },
+    "ANTHROPIC_AUTH_TOKEN": {
+      "description": "Security token for your proxy",
+      "value": "heroku"
+    },
+    "MODEL": {
+      "description": "Fallback model",
+      "value": "nvidia_nim/z-ai/glm4.7"
+    },
+    "MODEL_OPUS": {
+      "description": "Model for Opus tier",
+      "value": "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+    },
+    "MODEL_SONNET": {
+      "description": "Model for Sonnet tier",
+      "value": "nvidia_nim/z-ai/glm4.7"
+    },
+    "MODEL_HAIKU": {
+      "description": "Model for Haiku tier",
+      "value": "nvidia_nim/deepseek-ai/deepseek-v4-flash"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "standard-2x"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "https://github.com/astral-sh/uv-buildpack"
+    },
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
