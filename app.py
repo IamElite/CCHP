@@ -5,15 +5,26 @@ import asyncio
 import time
 import urllib.request
 import json
+import fcntl
 from threading import Thread
 
 # =============================================================================
 # GHOST UPDATER: Auto-sync with upstream every X hours without manual restart
 # =============================================================================
 def run_upgrade():
+    # Use a lock file to ensure only one worker process runs the update
+    lock_file = "/tmp/ghost_updater.lock"
+    lock_fd = open(lock_file, "w")
+    try:
+        # Acquire an exclusive lock (non-blocking)
+        fcntl.lockf(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        # Already being handled by another worker
+        return
+    
     print("Ghost Updater: Checking for updates from upstream...")
     try:
-        # Get latest commit hash from GitHub API (no 'git' command needed)
+        # Get latest commit hash from GitHub API (faster check)
         api_url = "https://api.github.com/repos/Alishahryar1/free-claude-code/commits/main"
         headers = {"User-Agent": "Heroku-Ghost-Updater"}
         req = urllib.request.Request(api_url, headers=headers)
@@ -22,7 +33,6 @@ def run_upgrade():
             data = json.load(response)
             remote_hash = data["sha"]
         
-        # Save hash to a temp file to compare later
         hash_file = "/tmp/last_git_hash"
         last_hash = ""
         if os.path.exists(hash_file):
@@ -31,7 +41,7 @@ def run_upgrade():
         
         if remote_hash != last_hash:
             print(f"Ghost Updater: New version detected ({remote_hash}). Updating...")
-            # Use -U to ensure it actually updates
+            # Pip install git+https requires the 'git' buildpack
             subprocess.run(
                 [sys.executable, "-m", "pip", "install", "-U", "git+https://github.com/Alishahryar1/free-claude-code.git"],
                 check=True,
@@ -40,17 +50,21 @@ def run_upgrade():
             with open(hash_file, "w") as f:
                 f.write(remote_hash)
             
-            print("Ghost Updater: Update applied. It will take effect on the next restart (natural or manual).")
+            print("Ghost Updater: Update applied. It will take effect on the next natural restart.")
         else:
             print("Ghost Updater: Already up to date.")
     except Exception as e:
         print(f"Ghost Updater: Check failed: {e}")
+    finally:
+        # Release lock
+        fcntl.lockf(lock_fd, fcntl.LOCK_UN)
 
 def background_scheduler():
-    # Initial check on startup
+    # Initial check on startup (wait a few seconds to let workers settle)
+    time.sleep(5)
     run_upgrade()
     while True:
-        # Wait 2 hours (as requested)
+        # Wait 2 hours
         time.sleep(2 * 3600)
         run_upgrade()
 
