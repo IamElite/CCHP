@@ -34,9 +34,7 @@ def run_upgrade():
             with open(hash_file, "w") as f:
                 f.write(remote_hash)
             
-            print("Ghost Updater: Update applied. Restarting server to activate...")
-            # Magic restart: replaces current process with a new one
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            print("Ghost Updater: Update applied. It will take effect on the next restart (natural or manual).")
         else:
             print("Ghost Updater: Already up to date.")
     except Exception as e:
@@ -47,7 +45,7 @@ def background_scheduler():
     run_upgrade()
     while True:
         # Wait 6 hours
-        time.sleep(6 * 3600)
+        time.sleep(2 * 3600)
         run_upgrade()
 
 # Start updater in a separate thread so it doesn't block FastAPI
