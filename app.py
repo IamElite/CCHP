@@ -41,9 +41,10 @@ def run_upgrade():
         
         if remote_hash != last_hash:
             print(f"Ghost Updater: New version detected ({remote_hash}). Updating...")
-            # Run pip install and let it print directly to logs for debugging
+            # Use ZIP archive URL (No 'git' command required!)
+            zip_url = "https://github.com/Alishahryar1/free-claude-code/archive/refs/heads/main.zip"
             result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-U", "git+https://github.com/Alishahryar1/free-claude-code.git"],
+                [sys.executable, "-m", "pip", "install", "-U", zip_url],
                 capture_output=False,
                 text=True
             )

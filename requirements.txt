@@ -1,2 +1,2 @@
-git+https://github.com/Alishahryar1/free-claude-code.git
+free-claude-code @ https://github.com/Alishahryar1/free-claude-code/archive/refs/heads/main.zip
 uvicorn[standard]
