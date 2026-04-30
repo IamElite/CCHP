@@ -3,19 +3,24 @@ import subprocess
 import sys
 import asyncio
 import time
+import urllib.request
+import json
 from threading import Thread
 
 # =============================================================================
-# GHOST UPDATER: Auto-sync with upstream every 6 hours without manual restart
+# GHOST UPDATER: Auto-sync with upstream every X hours without manual restart
 # =============================================================================
 def run_upgrade():
     print("Ghost Updater: Checking for updates from upstream...")
     try:
-        # Check if there's actually a new commit to avoid unnecessary restarts
-        # We use git ls-remote to get the latest hash
-        remote_hash = subprocess.check_output(
-            ["git", "ls-remote", "https://github.com/Alishahryar1/free-claude-code.git", "HEAD"]
-        ).split()[0].decode()
+        # Get latest commit hash from GitHub API (no 'git' command needed)
+        api_url = "https://api.github.com/repos/Alishahryar1/free-claude-code/commits/main"
+        headers = {"User-Agent": "Heroku-Ghost-Updater"}
+        req = urllib.request.Request(api_url, headers=headers)
+        
+        with urllib.request.urlopen(req) as response:
+            data = json.load(response)
+            remote_hash = data["sha"]
         
         # Save hash to a temp file to compare later
         hash_file = "/tmp/last_git_hash"
@@ -26,8 +31,9 @@ def run_upgrade():
         
         if remote_hash != last_hash:
             print(f"Ghost Updater: New version detected ({remote_hash}). Updating...")
+            # Use -U to ensure it actually updates
             subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--upgrade", "git+https://github.com/Alishahryar1/free-claude-code.git"],
+                [sys.executable, "-m", "pip", "install", "-U", "git+https://github.com/Alishahryar1/free-claude-code.git"],
                 check=True,
                 capture_output=True
             )
@@ -44,11 +50,11 @@ def background_scheduler():
     # Initial check on startup
     run_upgrade()
     while True:
-        # Wait 6 hours
+        # Wait 2 hours (as requested)
         time.sleep(2 * 3600)
         run_upgrade()
 
-# Start updater in a separate thread so it doesn't block FastAPI
+# Start updater in a separate thread
 Thread(target=background_scheduler, daemon=True).start()
 
 from api.app import create_asgi_app
