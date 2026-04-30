@@ -41,16 +41,19 @@ def run_upgrade():
         
         if remote_hash != last_hash:
             print(f"Ghost Updater: New version detected ({remote_hash}). Updating...")
-            # Pip install git+https requires the 'git' buildpack
-            subprocess.run(
+            # Run pip install and let it print directly to logs for debugging
+            result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "-U", "git+https://github.com/Alishahryar1/free-claude-code.git"],
-                check=True,
-                capture_output=True
+                capture_output=False,
+                text=True
             )
-            with open(hash_file, "w") as f:
-                f.write(remote_hash)
             
-            print("Ghost Updater: Update applied. It will take effect on the next natural restart.")
+            if result.returncode == 0:
+                with open(hash_file, "w") as f:
+                    f.write(remote_hash)
+                print("Ghost Updater: Update applied successfully. It will take effect on the next restart.")
+            else:
+                print(f"Ghost Updater: Update failed with exit code {result.returncode}. Check logs above.")
         else:
             print("Ghost Updater: Already up to date.")
     except Exception as e:
