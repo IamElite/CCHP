@@ -1,4 +1,21 @@
 import os
+import subprocess
+import sys
+
+# =============================================================================
+# AUTO-UPDATER: Fetch latest code from upstream on every restart
+# =============================================================================
+print("Checking for updates from upstream repository...")
+try:
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--upgrade", "git+https://github.com/Alishahryar1/free-claude-code.git"],
+        check=True,
+        capture_output=True
+    )
+    print("Update successful or already up to date.")
+except Exception as e:
+    print(f"Update failed (using cached version): {e}")
+
 from api.app import create_asgi_app
 from config.settings import get_settings
 
