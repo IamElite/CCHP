@@ -5,21 +5,39 @@ import asyncio
 import time
 import urllib.request
 import json
-import fcntl
+import tempfile
 from threading import Thread
+
+# Conditional import for fcntl (Unix only)
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 
 # =============================================================================
 # GHOST UPDATER: Auto-sync with upstream every X hours without manual restart
 # =============================================================================
 def run_upgrade():
     # Use a lock file to ensure only one worker process runs the update
-    lock_file = "/tmp/ghost_updater.lock"
-    lock_fd = open(lock_file, "w")
+    temp_dir = tempfile.gettempdir()
+    lock_file = os.path.join(temp_dir, "ghost_updater.lock")
+    
+    lock_fd = None
     try:
-        # Acquire an exclusive lock (non-blocking)
-        fcntl.lockf(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        # Already being handled by another worker
+        lock_fd = open(lock_file, "w")
+        if fcntl:
+            try:
+                # Acquire an exclusive lock (non-blocking)
+                fcntl.lockf(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except (BlockingIOError, IOError):
+                # Already being handled by another worker
+                return
+        else:
+            # On Windows/other systems without fcntl, we skip the lock
+            # Heroku is Linux, so this is mainly for local development compatibility
+            pass
+    except Exception as e:
+        print(f"Ghost Updater: Lock setup failed: {e}")
         return
     
     print("Ghost Updater: Checking for updates from upstream...")
@@ -33,11 +51,14 @@ def run_upgrade():
             data = json.load(response)
             remote_hash = data["sha"]
         
-        hash_file = "/tmp/last_git_hash"
+        hash_file = os.path.join(temp_dir, "last_git_hash")
         last_hash = ""
         if os.path.exists(hash_file):
-            with open(hash_file, "r") as f:
-                last_hash = f.read().strip()
+            try:
+                with open(hash_file, "r") as f:
+                    last_hash = f.read().strip()
+            except Exception:
+                pass
         
         if remote_hash != last_hash:
             print(f"Ghost Updater: New version detected ({remote_hash}). Updating...")
@@ -60,8 +81,13 @@ def run_upgrade():
     except Exception as e:
         print(f"Ghost Updater: Check failed: {e}")
     finally:
-        # Release lock
-        fcntl.lockf(lock_fd, fcntl.LOCK_UN)
+        if lock_fd:
+            if fcntl:
+                try:
+                    fcntl.lockf(lock_fd, fcntl.LOCK_UN)
+                except Exception:
+                    pass
+            lock_fd.close()
 
 def background_scheduler():
     # Initial check on startup (wait a few seconds to let workers settle)
@@ -75,21 +101,38 @@ def background_scheduler():
 # Start updater in a separate thread
 Thread(target=background_scheduler, daemon=True).start()
 
+import api.services
 from api.app import create_asgi_app
-from config.settings import get_settings
 
 # =============================================================================
-# Heroku Configuration (Default Values)
+# HEROKU H15 FIX: Inject heartbeats into SSE streams to prevent idle timeouts
 # =============================================================================
-os.environ.setdefault("NVIDIA_NIM_API_KEY", "your_api_key_here")
-os.environ.setdefault("ANTHROPIC_AUTH_TOKEN", "heroku")
+def patch_streaming_responses():
+    """Monkeypatch api.services to inject heartbeats into all SSE streams."""
+    original_sse_response = api.services.anthropic_sse_streaming_response
 
-os.environ.setdefault("MODEL", "nvidia_nim/z-ai/glm4.7")
-os.environ.setdefault("MODEL_OPUS", "nvidia_nim/deepseek-ai/deepseek-v4-pro")
-os.environ.setdefault("MODEL_SONNET", "nvidia_nim/z-ai/glm4.7")
-os.environ.setdefault("MODEL_HAIKU", "nvidia_nim/deepseek-ai/deepseek-v4-flash")
+    async def heartbeat_wrapper(body, interval=25):
+        """Wrap an async iterator and yield heartbeats if it stays idle."""
+        it = body.__aiter__()
+        while True:
+            try:
+                # Wait for next chunk from the upstream provider
+                yield await asyncio.wait_for(it.__anext__(), timeout=interval)
+            except asyncio.TimeoutError:
+                # Send an SSE comment heartbeat to keep the Heroku connection alive
+                yield ": heartbeat\n\n"
+            except StopAsyncIteration:
+                break
+            except Exception:
+                raise
 
-# Get settings instance
-settings = get_settings()
+    def patched_sse_response(body):
+        return original_sse_response(heartbeat_wrapper(body))
+
+    api.services.anthropic_sse_streaming_response = patched_sse_response
+    print("Heroku H15 Fix: Heartbeat patch applied to streaming responses.")
+
+# Apply the patch before creating the app
+patch_streaming_responses()
 
 app = create_asgi_app()
