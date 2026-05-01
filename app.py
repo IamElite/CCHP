@@ -111,20 +111,47 @@ def patch_streaming_responses():
     """Monkeypatch api.services to inject heartbeats into all SSE streams."""
     original_sse_response = api.services.anthropic_sse_streaming_response
 
-    async def heartbeat_wrapper(body, interval=25):
-        """Wrap an async iterator and yield heartbeats if it stays idle."""
+    async def heartbeat_wrapper(body, interval=20):
+        """Wrap an async iterator and yield heartbeats if it stays idle.
+        
+        Uses a non-cancelling approach to preserve upstream stream integrity.
+        """
+        # 1. Send an initial heartbeat immediately to flush headers and reset Heroku timer
+        yield ": heartbeat\n\n"
+        
         it = body.__aiter__()
-        while True:
-            try:
-                # Wait for next chunk from the upstream provider
-                yield await asyncio.wait_for(it.__anext__(), timeout=interval)
-            except asyncio.TimeoutError:
-                # Send an SSE comment heartbeat to keep the Heroku connection alive
-                yield ": heartbeat\n\n"
-            except StopAsyncIteration:
-                break
-            except Exception:
-                raise
+        # We use a task to pull data so we can wait on it without cancelling it
+        next_task = asyncio.create_task(it.__anext__())
+        
+        try:
+            while True:
+                # Wait for either data or timeout
+                done, pending = await asyncio.wait(
+                    [next_task], 
+                    timeout=interval, 
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+                
+                if next_task in done:
+                    try:
+                        result = next_task.result()
+                        yield result
+                        # Prepare the next data fetch task
+                        next_task = asyncio.create_task(it.__anext__())
+                    except StopAsyncIteration:
+                        break
+                else:
+                    # Timeout: Send heartbeat and keep waiting for the same task
+                    yield ": heartbeat\n\n"
+        except Exception:
+            # Clean up the pending task if something goes wrong
+            if not next_task.done():
+                next_task.cancel()
+            raise
+        finally:
+            # Ensure task is not left dangling
+            if not next_task.done():
+                next_task.cancel()
 
     def patched_sse_response(body):
         return original_sse_response(heartbeat_wrapper(body))
