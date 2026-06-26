@@ -101,6 +101,8 @@ def background_scheduler():
 # Start updater in a separate thread
 Thread(target=background_scheduler, daemon=True).start()
 
+import asyncio
+
 import api.services
 from api.app import create_asgi_app
 
