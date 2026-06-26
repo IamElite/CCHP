@@ -1,3 +1,2 @@
 https://github.com/Alishahryar1/free-claude-code/archive/refs/heads/main.zip
 uvicorn[standard]
-git
