@@ -6,7 +6,7 @@
   "env": {
     "NVIDIA_NIM_API_KEY": {
       "description": "Your NVIDIA NIM API Key",
-      "required": true
+      "required": true,
       "value": "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"
     },
     "ANTHROPIC_AUTH_TOKEN": {
@@ -39,6 +39,6 @@
   "buildpacks": [
     {
       "url": "heroku/python"
-    },
+    }
   ]
 }
