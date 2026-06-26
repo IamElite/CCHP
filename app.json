@@ -38,9 +38,6 @@
   },
   "buildpacks": [
     {
-      "url": "heroku/git"
-    },
-    {
       "url": "heroku/python"
     }
   ]
