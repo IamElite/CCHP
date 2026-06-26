@@ -15,19 +15,19 @@
     },
     "MODEL": {
       "description": "Fallback model",
-      "value": "nvidia_nim/z-ai/glm4.7"
+      "value": "nvidia_nim/z-ai/glm-5.1"
     },
     "MODEL_OPUS": {
       "description": "Model for Opus tier",
-      "value": "nvidia_nim/deepseek-ai/deepseek-v4-pro"
+      "value": "nvidia_nim/minimaxai/minimax-m3"
     },
     "MODEL_SONNET": {
       "description": "Model for Sonnet tier",
-      "value": "nvidia_nim/z-ai/glm4.7"
+      "value": "nvidia_nim/z-ai/glm-5.1"
     },
     "MODEL_HAIKU": {
       "description": "Model for Haiku tier",
-      "value": "nvidia_nim/deepseek-ai/deepseek-v4-flash"
+      "value": "nvidia_nim/stepfun-ai/step-3.7-flash"
     }
   },
   "formation": {
